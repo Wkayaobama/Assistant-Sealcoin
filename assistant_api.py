@@ -2,6 +2,9 @@ from openai import OpenAI
 import config
 import os
 import time
+import json
+import tempfile
+import shutil
 
 client = OpenAI(api_key=config.API_KEY)
 def createAssistant(file_ids, title):
@@ -95,8 +98,15 @@ def retrieveThread(thread_id):
 
 
 def addMessageToThread(thread_id, prompt):
-    client = OpenAI(api_key=config.API_KEY)
-    thread_message = client.beta.threads.messages.create(thread_id,role="user",content=prompt)
+    """Adds a message to an existing thread and returns True if successful."""
+    try:
+        client = OpenAI(api_key=config.API_KEY)
+        client.beta.threads.messages.create(thread_id=thread_id, role="user", content=prompt)
+        return True
+    except Exception as e:
+        print(f"Error adding message to thread: {e}")
+        return False
+
 
 
 ## Update assistant
@@ -143,109 +153,54 @@ def create_and_run_thread(assistant_id, user_prompt):
     except Exception as e:
         print(f"Error during thread creation or execution: {str(e)}")
 
+
+import json
+
+def save_thread_details(thread_id, assistant_id):
+    """Atomically save thread and assistant details to a JSON file."""
+    temp_fd, temp_path = tempfile.mkstemp()
+    try:
+        with os.fdopen(temp_fd, 'w') as tmp_file:
+            json.dump({"thread_id": thread_id, "assistant_id": assistant_id}, tmp_file, indent=4)
+        shutil.move(temp_path, "thread_details.json")  # Atomically replace the old file
+    except Exception as e:
+        os.unlink(temp_path)
+        print(f"Failed to save thread details: {e}")
+
+def load_thread_details():
+    """Load thread and assistant details from a JSON file with retries for robustness."""
+    retry_attempts = 3
+    while retry_attempts > 0:
+        try:
+            with open("thread_details.json", "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            print("Error decoding JSON from the file, retrying...")
+            retry_attempts -= 1
+        except FileNotFoundError:
+            print("The file doesn't exist.")
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+    print("Failed to load thread details after several attempts.")
+    return None
+
+
+
+# Example usage
+#thread_id = "thread_XoO7X1cBQHyMuj9qcj2rtXms"
+#assistant_id = "asst_xjtt9zGAk6Rszk6UQ3HN1Cfr"
+
+
 # Example usage:
-assistant_id = "asst_xjtt9zGAk6Rszk6UQ3HN1Cfr"
+""" assistant_id = "asst_xjtt9zGAk6Rszk6UQ3HN1Cfr"
 new_name = "SEALCOINV3"
-new_description = "Hi How Are You?"
+new_description = "Hi How Are You?" """
 
 # Update Assistant Configuration
-update_assistant(assistant_id, new_name, new_description)
+# update_assistant(assistant_id, new_name, new_description)
 
 # Create and Run Thread
-user_prompt = "tell me about the best jobs in AI"
-create_and_run_thread(assistant_id, user_prompt)
-
-from openai import OpenAI
-import config
-
-client = OpenAI(api_key=config.API_KEY)
-
-def getAssistant(assistant_id=None, name=None):
-    """
-    Retrieve an assistant by ID or name.
-    
-    Args:
-    assistant_id (str): Unique identifier for the assistant.
-    name (str): Name of the assistant.
-
-    Returns:
-    Assistant object or None if not found.
-    """
-    try:
-        if assistant_id:
-            return client.beta.assistants.retrieve(assistant_id=assistant_id)
-        elif name:
-            assistants = client.beta.assistants.list()
-            for assistant in assistants.data:
-                if assistant.name == name:
-                    return assistant
-        return None
-    except Exception as e:
-        print(f"Error retrieving assistant: {e}")
-        return None
-    
-
-
-def getThread(thread_id):
-    """
-    Retrieve a specific thread by its ID.
-
-    Args:
-    thread_id (str): The unique identifier for the thread.
-
-    Returns:
-    Thread object or None if the thread does not exist.
-    """
-    try:
-        return client.beta.threads.retrieve(thread_id=thread_id)
-    except Exception as e:
-        print(f"Error retrieving thread: {e}")
-        return None
-    
-def getLatestThread():
-    """
-    Retrieve the most recent thread.
-
-    Returns:
-    Thread object for the most recently created or updated thread, or None if no threads exist.
-    """
-    try:
-        threads = client.beta.threads.list()
-        if threads.data:
-            # Assuming threads are returned in the order they were created or updated, latest first
-            latest_thread = threads.data[0]
-            return latest_thread
-        else:
-            print("No threads available.")
-            return None
-    except Exception as e:
-        print(f"Error retrieving threads: {e}")
-        return None
-
-def runThread(thread_id, assistant_id):
-    """Run the thread to process all messages and get a response from the assistant."""
-    return client.beta.threads.runs.create(thread_id=thread_id, assistant_id=assistant_id)
-
-def listMessages(thread_id):
-    """List all messages from a specified thread."""
-    return client.beta.threads.messages.list(thread_id=thread_id).data
-
-def addMessageToThread(thread_id, prompt):
-    """
-    Adds a new user message to an existing thread.
-    """
-    try:
-        # Create the OpenAI Client
-        client = OpenAI(api_key=config.API_KEY)
-        # Add message to the thread
-        message = client.beta.threads.messages.create(
-            thread_id=thread_id,
-            role="user",
-            content=prompt
-        )
-        return message
-    except Exception as e:
-        print(f"Error adding message to thread: {e}")
-        return None
-    
-
+#user_prompt = "tell me about the best jobs in AI"
+#create_and_run_thread(assistant_id, user_prompt)
